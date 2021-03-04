@@ -17,11 +17,35 @@ public final class FetchImage: ObservableObject, Identifiable {
     // MARK: - Paramaters
     
     /// The original request.
-    public private(set) var request: ImageRequest?
+    public private(set) var request: ImageRequest? {
+        didSet {
+            assert(Thread.isMainThread, "Only modify the request from the main thread.")
+            if currentlyLoadingImageQuality == .regular {
+                cancel()
+            }
+            guard let newRequest = request else {
+                if loadedImageQuality == .regular {
+                    image = nil
+                }
+                return
+            }
+            priority = newRequest.priority
+        }
+    }
     
     /// The request to be performed if the original request fails with
     /// `networkUnavailableReason` `.constrained` (low data mode).
-    public private(set) var lowDataRequest: ImageRequest?
+    public private(set) var lowDataRequest: ImageRequest? {
+        didSet {
+            assert(Thread.isMainThread, "Only modify the request from the main thread.")
+            if currentlyLoadingImageQuality == .low {
+                cancel()
+            }
+            if lowDataRequest == nil && loadedImageQuality == .low {
+                image = nil
+            }
+        }
+    }
     
     /// Returns the fetched image.
     ///
@@ -56,6 +80,7 @@ public final class FetchImage: ObservableObject, Identifiable {
     public var pipeline: ImagePipeline = .shared
     private var task: ImageTask?
     private var loadedImageQuality: ImageQuality?
+    private var currentlyLoadingImageQuality: ImageQuality? = nil
     
     private enum ImageQuality {
         case regular
@@ -200,6 +225,7 @@ public final class FetchImage: ObservableObject, Identifiable {
     
     private func load(request: ImageRequest, quality: ImageQuality) {
         progress = Progress(completed: 0, total: 0)
+        currentlyLoadingImageQuality = quality
         
         task = pipeline.loadImage(
             with: request,
@@ -224,6 +250,7 @@ public final class FetchImage: ObservableObject, Identifiable {
     
     private func didFinishRequest(result: Result<ImageResponse, ImagePipeline.Error>, quality: ImageQuality) {
         task = nil
+        currentlyLoadingImageQuality = nil
         
         switch result {
         case let .success(response):
