@@ -133,10 +133,10 @@ public final class FetchImage: ObservableObject, Identifiable {
     ///     begin. If the caller is `nil`, a fetch operation is queued immediately.
     ///
     public func load(regularStorageRef: StorageReference, lowDataStorageRef: StorageReference? = nil,
-                     uniqueURL: (() -> URL?)? = nil, finished: (() -> Void)? = nil) {
-        func finishOrLoad(_ request: ImageRequest, lowDataRequest: ImageRequest? = nil) {
+                     uniqueURL: (() -> URL?)? = nil, finished: ((URL?) -> Void)? = nil) {
+        func finishOrLoad(_ request: ImageRequest, lowDataRequest: ImageRequest? = nil, discoveredURL: URL? = nil) {
             if let completionBlock = finished {
-                completionBlock()
+                completionBlock(discoveredURL)
             } else {
                 load(request)
             }
@@ -149,9 +149,9 @@ public final class FetchImage: ObservableObject, Identifiable {
                     self.request = newRequest
                     self.priority = newRequest.priority
                     
-                    finishOrLoad(newRequest, lowDataRequest: lowDataRequest)
+                    finishOrLoad(newRequest, lowDataRequest: lowDataRequest, discoveredURL: given)
                 } else {
-                    finished?()
+                    finished?(discoveredURL)
                 }
             }
         }
@@ -164,7 +164,7 @@ public final class FetchImage: ObservableObject, Identifiable {
                 let newRequest = ImageRequest(url: givenURL)
                 self.request = newRequest
                 self.priority = newRequest.priority
-                finishOrLoad(newRequest)
+                finishOrLoad(newRequest, discoveredURL: givenURL)
                 return // Return early, no need to awaken the Firebeasty
             }
         }

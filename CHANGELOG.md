@@ -1,5 +1,11 @@
 # FetchImage 0.x
 
+## FetchImage 0.5.0
+
+*Mar 16, 2021*
+
+- The Firebase `load` call now provides a URL once cached.
+
 ## FetchImage 0.4.0
 
 *Mar 03, 2021*
