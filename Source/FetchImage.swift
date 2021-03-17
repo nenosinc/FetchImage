@@ -137,9 +137,8 @@ public final class FetchImage: ObservableObject, Identifiable {
         func finishOrLoad(_ request: ImageRequest, lowDataRequest: ImageRequest? = nil, discoveredURL: URL? = nil) {
             if let completionBlock = finished {
                 completionBlock(discoveredURL)
-            } else {
-                load(request)
             }
+            load(request)
         }
         
         func getRegularURL(lowDataRequest: ImageRequest? = nil) {
