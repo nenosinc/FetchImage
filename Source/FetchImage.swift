@@ -1,6 +1,8 @@
+//
 // The MIT License (MIT)
 //
 // Copyright (c) 2020 Alexander Grebenyuk (github.com/kean).
+//
 
 import SwiftUI
 import Nuke
@@ -83,15 +85,17 @@ public final class FetchImage: ObservableObject, Identifiable {
         }
         
         func getRegularURL() {
-            regularStorageRef.downloadURL { (discoveredURL, error) in
-                if let given = discoveredURL {
-                    let newRequest = ImageRequest(url: given)
-                    self.request = newRequest
-                    self.priority = newRequest.priority
-                    
-                    finishOrLoad(newRequest, discoveredURL: given)
-                } else {
-                    finished?(discoveredURL)
+            DispatchQueue.global(qos: .userInteractive).async {
+                regularStorageRef.downloadURL { (discoveredURL, error) in
+                    if let given = discoveredURL {
+                        let newRequest = ImageRequest(url: given)
+                        self.request = newRequest
+                        self.priority = newRequest.priority
+                        
+                        finishOrLoad(newRequest, discoveredURL: given)
+                    } else {
+                        finished?(discoveredURL)
+                    }
                 }
             }
         }
@@ -117,12 +121,6 @@ public final class FetchImage: ObservableObject, Identifiable {
     /// Starts loading the image if not already loaded and the download is not already
     /// in progress.
     ///
-    /// - note: Low Data Mode. If the `lowDataRequest` is provided and the regular
-    /// request fails because of the constrained network access, the fetcher tries to
-    /// download the low-quality image. The fetcher always tries to get the high quality
-    /// image. If the first attempt fails, the next time you call `fetch`, it is going
-    /// to attempt to fetch the regular quality image again.
-    ///
     public func load(_ request: ImageRequest) {
         _reset()
         
@@ -136,31 +134,38 @@ public final class FetchImage: ObservableObject, Identifiable {
         
         // Try to display the regular image if it is available in memory cache
         if let container = pipeline.cachedImage(for: request) {
-            image = container.image
+            Thread.executeOnMain {
+                self.image = container.image
+            }
             return // Nothing to do
         }
         
-        isLoading = true
+        Thread.executeOnMain {
+            self.isLoading = true
+        }
         _load(request: request)
     }
 
     private func _load(request: ImageRequest) {
-        progress = Progress(completed: 0, total: 0)
-        currentlyLoadingImageQuality = quality
+        Thread.executeOnMain {
+            self.progress = Progress(completed: 0, total: 0)
+        }
         
         task = pipeline.loadImage(
             with: request,
-            progress: { [weak self] response, completed, total in
-                guard let self = self else { return }
-                
-                self.progress = Progress(completed: completed, total: total)
+            progress: { response, completed, total in
+                Thread.executeOnMain {
+                    self.progress = Progress(completed: completed, total: total)
+                }
                 
                 if let image = response?.image {
-                    self.image = image // Display progressively decoded image
+                    Thread.executeOnMain {
+                        self.image = image // Display progressively decoded image
+                    }
                 }
             },
-            completion: { [weak self] in
-                self?.didFinishRequest(result: $0)
+            completion: { result in
+                self.didFinishRequest(result: result)
             }
         )
         
@@ -170,15 +175,22 @@ public final class FetchImage: ObservableObject, Identifiable {
     }
 
     private func didFinishRequest(result: Result<ImageResponse, ImagePipeline.Error>) {
-        task = nil
-        isLoading = false
+        defer {
+            task = nil
+            Thread.executeOnMain {
+                self.isLoading = false
+            }
+        }
         
         switch result {
         case let .success(response):
-            self.image = response.image
+            Thread.executeOnMain {
+                self.image = response.image
+            }
         case let .failure(error):
-            self.error = error
-            isLoading = false
+            Thread.executeOnMain {
+                self.error = error
+            }
         }
     }
     
@@ -190,7 +202,9 @@ public final class FetchImage: ObservableObject, Identifiable {
     public func cancel() {
         task?.cancel() // Guarantees that no more callbacks are will be delivered
         task = nil
-        isLoading = false
+        Thread.executeOnMain {
+            self.isLoading = false
+        }
     }
     
     /// Resets the `FetchImage` instance by cancelling the request and removing all of
@@ -202,11 +216,12 @@ public final class FetchImage: ObservableObject, Identifiable {
     }
 
     private func _reset() {
-        isLoading = false
-        image = nil
-        error = nil
-        progress = Progress(completed: 0, total: 0)
-        loadedImageQuality = nil
+        Thread.executeOnMain {
+            self.isLoading = false
+            self.image = nil
+            self.error = nil
+            self.progress = Progress(completed: 0, total: 0)
+        }
         request = nil
     }
     
@@ -220,6 +235,20 @@ public extension FetchImage {
         #else
         return image.map(Image.init(uiImage:))
         #endif
+    }
+    
+}
+
+fileprivate extension Thread {
+    
+    class func executeOnMain(_ mainBlock: @escaping () -> Void) {
+        if Thread.isMainThread == true {
+            mainBlock()
+        } else {
+            DispatchQueue.main.async {
+                mainBlock()
+            }
+        }
     }
     
 }
