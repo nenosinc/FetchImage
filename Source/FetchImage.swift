@@ -9,44 +9,14 @@ import FirebaseStorage
 /// Fetch a remote image and progressively load using cached resources first, if
 /// available, then displaying a placeholder until fully loaded.
 ///
-/// - warning: This is an API preview. It is not battle-tested yet and might
-/// signficantly change in the future.
-///
 public final class FetchImage: ObservableObject, Identifiable {
     
     // MARK: - Paramaters
     
     /// The original request.
-    public private(set) var request: ImageRequest? {
-        didSet {
-            assert(Thread.isMainThread, "Only modify the request from the main thread.")
-            if currentlyLoadingImageQuality == .regular {
-                cancel()
-            }
-            guard let newRequest = request else {
-                if loadedImageQuality == .regular {
-                    image = nil
-                }
-                return
-            }
-            priority = newRequest.priority
-        }
-    }
-    
-    /// The request to be performed if the original request fails with
-    /// `networkUnavailableReason` `.constrained` (low data mode).
-    public private(set) var lowDataRequest: ImageRequest? {
-        didSet {
-            assert(Thread.isMainThread, "Only modify the request from the main thread.")
-            if currentlyLoadingImageQuality == .low {
-                cancel()
-            }
-            if lowDataRequest == nil && loadedImageQuality == .low {
-                image = nil
-            }
-        }
-    }
-    
+    ///
+    public private(set) var request: ImageRequest?
+
     /// Returns the fetched image.
     ///
     /// - note: In case pipeline has `isProgressiveDecodingEnabled` option enabled
@@ -79,42 +49,17 @@ public final class FetchImage: ObservableObject, Identifiable {
     
     public var pipeline: ImagePipeline = .shared
     private var task: ImageTask?
-    private var loadedImageQuality: ImageQuality?
-    private var currentlyLoadingImageQuality: ImageQuality? = nil
-    
-    private enum ImageQuality {
-        case regular
-        case low
-    }
-    
     
     // MARK: - Lifecycle
     
     deinit {
         cancel()
     }
-    
-    public init() {
-        
-    }
-    
-    /// Loads an image with a regular URL and an optional low-data URL.
-    ///
-    /// If supplying an optional low-data URL, disables constrained network access on
-    /// the full size request. If the download fails on the initial full size URL, falls
-    /// back to the low-data URL.
-    ///
-    /// - parameter url: The remote image URL
-    /// - parameter lowDataUrl: The low data remote image URL
-    ///
-    public func load(_ url: URL, lowDataUrl: URL? = nil) {
-        var request = URLRequest(url: url)
-        if let constrainedURL = lowDataUrl {
-            request.allowsConstrainedNetworkAccess = false
-            load(ImageRequest(urlRequest: request), lowDataRequest: ImageRequest(url: constrainedURL))
-        } else {
-            load(ImageRequest(url: url))
-        }
+
+    public init() {}
+
+    public func load(_ url: URL) {
+        self.load(ImageRequest(url: url))
     }
     
     /// Initializes the fetch request with a Firebase Storage Reference to an image in
@@ -123,32 +68,28 @@ public final class FetchImage: ObservableObject, Identifiable {
     ///
     /// - parameter regularStorageRef: A `StorageReference` which points to a
     ///     Firebase Storage file in any of Nuke's supported image formats.
-    /// - parameter lowDataStorageRef: A `StorageReference` which points to a smaller
-    ///     Firebase Storage file in any of Nuke's supported image formats, which is also
-    ///     appropriate for low-data scenarios.
     /// - parameter uniqueURL: A caller to request any potentially cached image URLs.
     ///     Implementing your own URL caching prevents potentially unnecessary roundtrips to
     ///     your Firebase Storage bucket.
     /// - parameter finished: Called when URL loading has completed and fetching can
     ///     begin. If the caller is `nil`, a fetch operation is queued immediately.
     ///
-    public func load(regularStorageRef: StorageReference, lowDataStorageRef: StorageReference? = nil,
-                     uniqueURL: (() -> URL?)? = nil, finished: ((URL?) -> Void)? = nil) {
-        func finishOrLoad(_ request: ImageRequest, lowDataRequest: ImageRequest? = nil, discoveredURL: URL? = nil) {
+    public func load(regularStorageRef: StorageReference, uniqueURL: (() -> URL?)? = nil, finished: ((URL?) -> Void)? = nil) {
+        func finishOrLoad(_ request: ImageRequest, discoveredURL: URL? = nil) {
             if let completionBlock = finished {
                 completionBlock(discoveredURL)
             }
             load(request)
         }
         
-        func getRegularURL(lowDataRequest: ImageRequest? = nil) {
+        func getRegularURL() {
             regularStorageRef.downloadURL { (discoveredURL, error) in
                 if let given = discoveredURL {
                     let newRequest = ImageRequest(url: given)
                     self.request = newRequest
                     self.priority = newRequest.priority
                     
-                    finishOrLoad(newRequest, lowDataRequest: lowDataRequest, discoveredURL: given)
+                    finishOrLoad(newRequest, discoveredURL: given)
                 } else {
                     finished?(discoveredURL)
                 }
@@ -168,21 +109,8 @@ public final class FetchImage: ObservableObject, Identifiable {
             }
         }
         
-        if let lowDataRef = lowDataStorageRef {
-            lowDataRef.downloadURL { (discoveredURL, error) in
-                if let given = discoveredURL {
-                    let constrainedRequest = ImageRequest(url: given)
-                    self.lowDataRequest = constrainedRequest
-                    getRegularURL(lowDataRequest: constrainedRequest)
-                } else {
-                    getRegularURL()
-                }
-            }
-        } else {
-            getRegularURL()
-        }
+        getRegularURL()
     }
-    
     
     // MARK: - Fetching
     
@@ -195,7 +123,7 @@ public final class FetchImage: ObservableObject, Identifiable {
     /// image. If the first attempt fails, the next time you call `fetch`, it is going
     /// to attempt to fetch the regular quality image again.
     ///
-    public func load(_ request: ImageRequest, lowDataRequest: ImageRequest? = nil) {
+    public func load(_ request: ImageRequest) {
         _reset()
         
         // Cancel previous task after starting a new one to make sure that if
@@ -205,24 +133,18 @@ public final class FetchImage: ObservableObject, Identifiable {
         defer { previousTask?.cancel() }
         
         self.request = request
-        self.lowDataRequest = lowDataRequest
         
         // Try to display the regular image if it is available in memory cache
         if let container = pipeline.cachedImage(for: request) {
-            (image, loadedImageQuality) = (container.image, .regular)
+            image = container.image
             return // Nothing to do
         }
         
-        // Try to display the low data image and retry loading the regular image
-        if let container = lowDataRequest.flatMap(pipeline.cachedImage(for:)) {
-            (image, loadedImageQuality) = (container.image, .low)
-        }
-        
         isLoading = true
-        load(request: request, quality: .regular)
+        _load(request: request)
     }
-    
-    private func load(request: ImageRequest, quality: ImageQuality) {
+
+    private func _load(request: ImageRequest) {
         progress = Progress(completed: 0, total: 0)
         currentlyLoadingImageQuality = quality
         
@@ -238,7 +160,7 @@ public final class FetchImage: ObservableObject, Identifiable {
                 }
             },
             completion: { [weak self] in
-                self?.didFinishRequest(result: $0, quality: quality)
+                self?.didFinishRequest(result: $0)
             }
         )
         
@@ -246,28 +168,17 @@ public final class FetchImage: ObservableObject, Identifiable {
             task?.priority = priority
         }
     }
-    
-    private func didFinishRequest(result: Result<ImageResponse, ImagePipeline.Error>, quality: ImageQuality) {
+
+    private func didFinishRequest(result: Result<ImageResponse, ImagePipeline.Error>) {
         task = nil
-        currentlyLoadingImageQuality = nil
+        isLoading = false
         
         switch result {
         case let .success(response):
-            isLoading = false
-            (image, loadedImageQuality) = (response.image, quality)
+            self.image = response.image
         case let .failure(error):
-            // If the regular request fails because of the low data mode,
-            // use an alternative source.
-            if quality == .regular, error.isConstrainedNetwork, let request = self.lowDataRequest {
-                if loadedImageQuality == .low {
-                    isLoading = false // Low-quality image already loaded
-                } else {
-                    load(request: request, quality: .low)
-                }
-            } else {
-                self.error = error
-                isLoading = false
-            }
+            self.error = error
+            isLoading = false
         }
     }
     
@@ -289,25 +200,14 @@ public final class FetchImage: ObservableObject, Identifiable {
         cancel()
         _reset()
     }
-    
+
     private func _reset() {
         isLoading = false
         image = nil
         error = nil
         progress = Progress(completed: 0, total: 0)
         loadedImageQuality = nil
-    }
-    
-}
-
-private extension ImagePipeline.Error {
-    
-    var isConstrainedNetwork: Bool {
-        if case let .dataLoadingFailed(error) = self,
-           (error as? URLError)?.networkUnavailableReason == .constrained {
-            return true
-        }
-        return false
+        request = nil
     }
     
 }

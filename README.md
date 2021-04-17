@@ -113,7 +113,6 @@ private func withoutAnimation(_ closure: () -> Void) {
     var transaction = Transaction(animation: nil)
     transaction.disablesAnimations = true
     withTransaction(transaction, closure)
-}
 ```
 
 ### Firebase
