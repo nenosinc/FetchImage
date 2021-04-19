@@ -24,24 +24,47 @@ public final class FetchImage: ObservableObject, Identifiable {
     /// - note: In case pipeline has `isProgressiveDecodingEnabled` option enabled
     /// and the image being downloaded supports progressive decoding, the `image`
     /// might be updated multiple times during the download.
-    @Published public private(set) var image: PlatformImage?
+    ///
+    @Published public private(set) var image: PlatformImage? {
+        didSet {
+            DispatchQueue.global(qos: .userInitiated).async {
+                if let uiImage = self.image?.imageWithoutBaseline() {
+                    uiImage.getColors(quality: .high) { uiImageColors in
+                        guard let foundColors = uiImageColors else { return }
+                        Thread.executeOnMain {
+                            self.imageColors = ImageColors(from: foundColors)
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     /// Returns an error if the previous attempt to fetch the image failed with an
     /// error. Error is cleared out when the download is restarted.
+    ///
     @Published public private(set) var error: Error?
     
     public struct Progress {
         /// The number of bytes that the task has received.
+        ///
         public let completed: Int64
         
         /// A best-guess upper bound on the number of bytes the client expects to send.
+        ///
         public let total: Int64
     }
     
     /// The progress of the image download.
+    ///
     @Published public var progress = Progress(completed: 0, total: 0)
     
+    /// Suggested background, accent, and foreground colors based on the loaded image.
+    ///
+    @Published public var imageColors: ImageColors?
+    
     /// Updates the priority of the task, even if the task is already running.
+    ///
     public var priority: ImageRequest.Priority = .normal {
         didSet { task?.priority = priority }
     }
