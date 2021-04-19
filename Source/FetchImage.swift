@@ -30,9 +30,6 @@ public final class FetchImage: ObservableObject, Identifiable {
     /// error. Error is cleared out when the download is restarted.
     @Published public private(set) var error: Error?
     
-    /// Returns `true` if the image is being loaded.
-    @Published public private(set) var isLoading: Bool = false
-    
     public struct Progress {
         /// The number of bytes that the task has received.
         public let completed: Int64
@@ -51,6 +48,7 @@ public final class FetchImage: ObservableObject, Identifiable {
     
     public var pipeline: ImagePipeline = .shared
     private var task: ImageTask?
+    
     
     // MARK: - Lifecycle
     
@@ -140,9 +138,6 @@ public final class FetchImage: ObservableObject, Identifiable {
             return // Nothing to do
         }
         
-        Thread.executeOnMain {
-            self.isLoading = true
-        }
         _load(request: request)
     }
 
@@ -177,9 +172,6 @@ public final class FetchImage: ObservableObject, Identifiable {
     private func didFinishRequest(result: Result<ImageResponse, ImagePipeline.Error>) {
         defer {
             task = nil
-            Thread.executeOnMain {
-                self.isLoading = false
-            }
         }
         
         switch result {
@@ -202,9 +194,6 @@ public final class FetchImage: ObservableObject, Identifiable {
     public func cancel() {
         task?.cancel() // Guarantees that no more callbacks are will be delivered
         task = nil
-        Thread.executeOnMain {
-            self.isLoading = false
-        }
     }
     
     /// Resets the `FetchImage` instance by cancelling the request and removing all of
@@ -217,7 +206,6 @@ public final class FetchImage: ObservableObject, Identifiable {
 
     private func _reset() {
         Thread.executeOnMain {
-            self.isLoading = false
             self.image = nil
             self.error = nil
             self.progress = Progress(completed: 0, total: 0)
