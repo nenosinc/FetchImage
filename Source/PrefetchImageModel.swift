@@ -70,11 +70,11 @@ public final class PrefetchViewModel: ObservableObject, ScrollViewPrefetcherDele
         }
     }
     
-    func onAppear(_ index: Int) {
+    public func onAppear(_ index: Int) {
         scrollViewPrefetcer.onAppear(index)
     }
     
-    func onDisappear(_ index: Int) {
+    public func onDisappear(_ index: Int) {
         scrollViewPrefetcer.onDisappear(index)
     }
     
