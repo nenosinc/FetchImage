@@ -52,12 +52,13 @@ struct ImageView: View {
                 .clipped()
         }
         .onAppear { image.load(url) }
+        .onChange(of: url) { image.load($0) }
         .onDisappear(perform: image.reset)
     }
 }
 ```
 
-> For iOS 13, use `@ObservedObject`. Keep in mind that `@ObservedObject` does not own the instance; you need to maintain a strong reference to the `FetchImage` instance.
+> For iOS 13, use `@ObservedObject`. Keep in mind that `@ObservedObject` does not own the instance; you need to maintain a strong reference to the `FetchImage` instance. Instead of `onChange(of:)`, add `.id(url)` to your `ImageView` – it will ensure that `onAppear` is called when the URL changes.
 
 Usage with a list:
 
@@ -71,8 +72,6 @@ struct DetailsView: View {
     }
 }
 ```
-
-> If the URL changes, add `.id(url)` to your `ImageView`. This will ensure that `onAppear` is called when the URL changes.
 
 `FetchImage` gives you full control over how to manage the download and display the image. For example, if you want the download to continue when the view leaves the screen, change the appearance callbacks:
 
