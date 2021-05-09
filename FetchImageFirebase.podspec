@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'FetchImageFirebase'
-  s.version          = '1.7.0'
+  s.version          = '1.7.1'
   s.summary          = 'Download images using Firebase and Nuke, display them in SwiftUI.'
   
   s.description      = 'FetchImageFirebase makes it easy to download images using Firebase and Nuke, and then display them in SwiftUI apps.'
