@@ -6,7 +6,7 @@
 
 import SwiftUI
 
-public protocol ScrollViewPrefetcherDelegate: class {
+public protocol ScrollViewPrefetcherDelegate: AnyObject {
     
     /// Returns all valid indices for the collection.
     func getAllIndicesForPrefetcher(_ prefetcher: ScrollViewPrefetcher) -> Range<Int>
