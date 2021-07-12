@@ -154,9 +154,9 @@ public final class FireFetchImage: ObservableObject, Identifiable {
         self.request = request
         
         // Try to display the regular image if it is available in memory cache
-        if let container = pipeline.cachedImage(for: request) {
+        if let image = pipeline.cache[request] {
             Thread.executeOnMain {
-                self.image = container.image
+                self.image = image.image
             }
             return // Nothing to do
         }
