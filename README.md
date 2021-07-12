@@ -13,7 +13,7 @@
 `FetchImage` is an observable object ([`ObservableObject`](https://developer.apple.com/documentation/combine/observableobject)) that allows you to manage the download of an image and observe the results of the download.
 
 ```swift
-public final class FetchImage: ObservableObject, Identifiable {
+public final class FireFetchImage: ObservableObject, Identifiable {
     /// Returns the fetched image.
     ///
     /// - note: In case pipeline has `isProgressiveDecodingEnabled` option enabled
@@ -41,7 +41,7 @@ public final class FetchImage: ObservableObject, Identifiable {
 struct ImageView: View {
     let url: URL
 
-    @StateObject private var image = FetchImage()
+    @StateObject private var image = FireFetchImage()
 
     var body: some View {
         ZStack {
@@ -94,7 +94,7 @@ struct DetailsView: View {
 struct ImageView: View {
     let url: URL
 
-    @StateObject private var image = FetchImage()
+    @StateObject private var image = FireFetchImage()
 
     var body: some View {
         // ... create image view 
@@ -122,7 +122,7 @@ You may also initialize a `FetchImage` using a Firestore `StorageReference`. The
 @State referencedImage: StorageReference
 
 public var body: some View {
-    ImageView(image: FetchImage(regularStorageRef: referencedImage)
+    ImageView(image: FireFetchImage(regularStorageRef: referencedImage))
         .animation(.default)
 }
 ```

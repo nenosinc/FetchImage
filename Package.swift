@@ -14,8 +14,8 @@ let package = Package(
         .library(name: "FetchImage", targets: ["FetchImage"])
     ],
     dependencies: [
-        .package(url: "https://github.com/kean/Nuke.git", from: "9.6.0"),
-        .package(name: "Firebase", url: "https://github.com/firebase/firebase-ios-sdk.git", from: "8.0.0")
+        .package(url: "https://github.com/kean/Nuke.git", from: "10.3.1"),
+        .package(name: "Firebase", url: "https://github.com/firebase/firebase-ios-sdk.git", from: "8.3.0")
     ],
     targets: [
         .target(name: "FetchImage",

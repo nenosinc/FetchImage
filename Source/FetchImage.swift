@@ -11,7 +11,7 @@ import FirebaseStorage
 /// Fetch a remote image and progressively load using cached resources first, if
 /// available, then displaying a placeholder until fully loaded.
 ///
-public final class FetchImage: ObservableObject, Identifiable {
+public final class FireFetchImage: ObservableObject, Identifiable {
     
     // MARK: - Paramaters
     
