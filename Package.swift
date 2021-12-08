@@ -1,27 +1,32 @@
-// swift-tools-version:5.4
+// swift-tools-version:5.5
 
 import PackageDescription
 
 let package = Package(
     name: "FetchImage",
     platforms: [
-        .macOS(.v11),
-        .iOS(.v14),
-        .tvOS(.v14),
-        .watchOS(.v7)
+        .iOS("15.0"),
+        .macOS("12.0")
     ],
     products: [
         .library(name: "FetchImage", targets: ["FetchImage"])
     ],
     dependencies: [
-        .package(url: "https://github.com/kean/Nuke.git", from: "10.3.1"),
-        .package(name: "Firebase", url: "https://github.com/firebase/firebase-ios-sdk.git", from: "8.3.0")
+        .package(
+            url: "https://github.com/kean/Nuke.git",
+            .upToNextMajor(from: "10.4.0")
+        ),
+        .package(
+            name: "Firebase",
+            url: "https://github.com/firebase/firebase-ios-sdk.git",
+            .upToNextMajor(from: "8.9.0")
+        )
     ],
     targets: [
         .target(name: "FetchImage",
                 dependencies: [
                     "Nuke",
-                    .product(name: "FirebaseStorage", package: "Firebase")
+                    .product(name: "FirebaseStorageSwift-Beta", package: "Firebase")
                 ],
                 path: "Source")
     ]

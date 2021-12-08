@@ -194,6 +194,7 @@ fileprivate extension Double {
 }
 
 extension UIImage {
+    
     #if os(OSX)
     private func resizeForUIImageColors(newSize: CGSize) -> UIImage? {
         let frame = CGRect(origin: .zero, size: newSize)
@@ -222,7 +223,7 @@ extension UIImage {
     #endif
     
     public func getColors(quality: UIImageColorsQuality = .high, _ completion: @escaping (UIImageColors?) -> Void) {
-        DispatchQueue.global().async {
+        DispatchQueue.global(qos: .userInteractive).async {
             let result = self.getColors(quality: quality)
             DispatchQueue.main.async {
                 completion(result)
