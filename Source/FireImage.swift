@@ -1,22 +1,25 @@
 //
 //  FireImage.swift
-//  
+//  FetchImage
 //
 //  Created by Sam Spencer on 7/11/21.
+//  Copyright © 2022 Sam Spencer
 //
 
-import Foundation
-import SwiftUI
 import Combine
-import Nuke
 import Firebase
-import FirebaseStorageSwift
+import FirebaseStorage
+import Foundation
+import Nuke
+import SwiftUI
 
 /// An observable object that simplifies image loading in SwiftUI.
+///
 @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
 public final class FireImage: ObservableObject, Identifiable {
     
     /// Returns the current fetch result.
+    ///
     @Published public private(set) var result: Result<ImageResponse, Error>?
     
     /// Returns the fetched image.
@@ -24,6 +27,7 @@ public final class FireImage: ObservableObject, Identifiable {
     /// - note: In case pipeline has `isProgressiveDecodingEnabled` option enabled
     /// and the image being downloaded supports progressive decoding, the `image`
     /// might be updated multiple times during the download.
+    ///
     public var image: PlatformImage? { imageContainer?.image }
     
     /// Returns the fetched image.
@@ -31,53 +35,67 @@ public final class FireImage: ObservableObject, Identifiable {
     /// - note: In case pipeline has `isProgressiveDecodingEnabled` option enabled
     /// and the image being downloaded supports progressive decoding, the `image`
     /// might be updated multiple times during the download.
+    ///
     @Published public private(set) var imageContainer: ImageContainer?
     
     /// Returns `true` if the image is being loaded.
+    ///
     @Published public private(set) var isLoading: Bool = false
     
     /// Animations to be used when displaying the loaded images. By default, `nil`.
     ///
     /// - note: Animation isn't used when image is available in memory cache.
+    ///
     public var animation: Animation?
     
     /// The download progress.
+    ///
     public struct Progress: Equatable {
         /// The number of bytes that the task has received.
+        ///
         public let completed: Int64
         
         /// A best-guess upper bound on the number of bytes the client expects to send.
+        ///
         public let total: Int64
     }
     
     /// The progress of the image download.
+    ///
     @Published public private(set) var progress = Progress(completed: 0, total: 0)
     
     /// Updates the priority of the task, even if the task is already running.
-    /// `nil` by default
+    /// `nil` by default.
+    ///
     public var priority: ImageRequest.Priority? {
         didSet { priority.map { imageTask?.priority = $0 } }
     }
     
     /// Gets called when the request is started.
+    ///
     public var onStart: ((_ task: ImageTask) -> Void)?
     
     /// Gets called when the request progress is updated.
+    ///
     public var onProgress: ((_ response: ImageResponse?, _ completed: Int64, _ total: Int64) -> Void)?
     
     /// Gets called when the requests finished successfully.
+    ///
     public var onSuccess: ((_ response: ImageResponse) -> Void)?
     
     /// Gets called when the requests fails.
+    ///
     public var onFailure: ((_ response: Error) -> Void)?
     
     /// Gets called when the request is completed.
+    ///
     public var onCompletion: ((_ result: Result<ImageResponse, Error>) -> Void)?
     
     public var pipeline: ImagePipeline = .shared
     
     /// Image processors to be applied unless the processors are provided in the request.
     /// `nil` by default.
+    ///
     public var processors: [ImageProcessing]?
     
     private var imageTask: ImageTask?
@@ -93,6 +111,51 @@ public final class FireImage: ObservableObject, Identifiable {
     public init() {}
     
     // MARK: Load (ImageRequestConvertible)
+    
+    public typealias CompletedLoad = ((URL?) async -> Void)
+    public typealias UniqueURL = (() async throws -> URL)
+    
+    public func load(_ regularStorageRef: StorageReference, uniqueURL: UniqueURL?, finished: CompletedLoad?) async {
+        // If provided, query the uniqueURL block for a cached URL.
+        // If successful, use that parameter instead.
+        if let uniqueURLBlock = uniqueURL {
+            do {
+                let givenURL = try await uniqueURLBlock()
+                let newRequest = ImageRequest(url: givenURL)
+                priority = newRequest.priority
+                await finishOrLoad(newRequest, discoveredURL: givenURL, finish: finished)
+                
+                // Return early, no need to awaken the Firebeasty
+                return
+            } catch let error {
+                print("Unable to load cached URL. \(error)")
+            }
+        }
+        
+        await fetchStandardURL(for: regularStorageRef, finish: finished)
+    }
+    
+    private func finishOrLoad(_ request: ImageRequest, discoveredURL: URL? = nil, finish: CompletedLoad?) async {
+        if let completionBlock = finish {
+            await completionBlock(discoveredURL)
+        }
+        
+        DispatchQueue.main.async {
+            self.load(request)
+        }
+    }
+    
+    private func fetchStandardURL(for regularStorageRef: StorageReference, finish: CompletedLoad?) async {
+        do {
+            let discoveredURL = try await regularStorageRef.downloadURL()
+            let newRequest = ImageRequest(url: discoveredURL)
+            priority = newRequest.priority
+            await finishOrLoad(newRequest, discoveredURL: discoveredURL, finish: finish)
+        } catch let error {
+            print("Unable to fetch remote URL: \(error)")
+            await finish?(nil)
+        }
+    }
     
     /// Initializes the fetch request with a Firebase Storage Reference to an image in
     /// any of Nuke's supported formats. The remote URL is then fetched from Firebase
@@ -145,6 +208,7 @@ public final class FireImage: ObservableObject, Identifiable {
     }
     
     /// Loads an image with the given request.
+    ///
     public func load(_ request: ImageRequestConvertible?) {
         assert(Thread.isMainThread, "Must be called from the main thread")
         
@@ -199,8 +263,9 @@ public final class FireImage: ObservableObject, Identifiable {
         onStart?(task)
     }
     
+    /// Display progressively decoded image.
+    /// 
     private func handle(preview: ImageResponse) {
-        // Display progressively decoded image
         self.imageContainer = preview.container
     }
     
@@ -227,6 +292,7 @@ public final class FireImage: ObservableObject, Identifiable {
     /// - warning: Some `FetchImage` features, such as progress reporting and
     /// dynamically changing the request priority, are not available when
     /// working with a publisher.
+    ///
     public func load<P: Publisher>(_ publisher: P) where P.Output == ImageResponse {
         reset()
         
@@ -254,6 +320,7 @@ public final class FireImage: ObservableObject, Identifiable {
     
     /// Marks the request as being cancelled. Continues to display a downloaded
     /// image.
+    ///
     public func cancel() {
         // pipeline-based
         imageTask?.cancel() // Guarantees that no more callbacks are will be delivered
@@ -268,6 +335,7 @@ public final class FireImage: ObservableObject, Identifiable {
     
     /// Resets the `FetchImage` instance by cancelling the request and removing
     /// all of the state including the loaded image.
+    ///
     public func reset() {
         cancel()
         
@@ -288,4 +356,5 @@ public final class FireImage: ObservableObject, Identifiable {
         return image.map(Image.init(uiImage:))
         #endif
     }
+    
 }

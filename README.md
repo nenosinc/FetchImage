@@ -8,6 +8,9 @@
 
 `FetchImage` makes it easy to download images using [Nuke](https://github.com/kean/Nuke) and display them in SwiftUI apps.
 
+## Firebase Support 🔥
+This fork of `FetchImage` extends the original interface with overloads for Firebase Storage. Read on to find out how easy it is to load images stored in your Firebase Storage bucket with Nuke and SwiftUI.
+
 ## Overview
 
 `FetchImage` is an observable object ([`ObservableObject`](https://developer.apple.com/documentation/combine/observableobject)) that allows you to manage the download of an image and observe the results of the download.
@@ -131,7 +134,7 @@ public var body: some View {
 
 | Nuke          | Swift           | Xcode           | Platforms                                         |
 |---------------|-----------------|-----------------|---------------------------------------------------|
-| FetchImage     | Swift 5.1       | Xcode 11.3      | iOS 13.0 / watchOS 6.0 / macOS 10.15 / tvOS 13.0  |
+| FetchImage    | Swift 5.6       | Xcode 13.3      | iOS 13.0 / watchOS 6.0 / macOS 10.15 / tvOS 13.0  |
 
 # License
 
