@@ -26,6 +26,28 @@ public final class PrefetchViewModel: ObservableObject, ScrollViewPrefetcherDele
         scrollViewPrefetcer.scheduleRefreshIfNeeded()
     }
     
+    public func load(_ photoReferences: [StorageReference], uniqueURL: @escaping (StorageReference) async -> URL?) async {
+        for reference in photoReferences {
+            if let cachedURL = await uniqueURL(reference) {
+                DispatchQueue.main.async {
+                    self.urls.append(cachedURL)
+                }
+                continue
+            }
+            
+            do {
+                let foundURL = try await reference.downloadURL()
+                DispatchQueue.main.async {
+                    self.urls.append(foundURL)
+                }
+            } catch let error {
+                print("[PrefetchViewModel] Unable to fetch download URL for photo. \(error)")
+            }
+        }
+        
+        scrollViewPrefetcer.scheduleRefreshIfNeeded()
+    }
+    
     public func load(photoReferences: [StorageReference], uniqueURL: @escaping (StorageReference) -> URL?) {
         let loadTask = DispatchGroup()
         let totalRefs = photoReferences.count
@@ -78,8 +100,7 @@ public final class PrefetchViewModel: ObservableObject, ScrollViewPrefetcherDele
         scrollViewPrefetcer.onDisappear(index)
     }
     
-    
-    // MARK: ScrollViewPrefetcherDelegate
+    // MARK: - ScrollViewPrefetcherDelegate
     
     public func getAllIndicesForPrefetcher(_ prefetcher: ScrollViewPrefetcher) -> Range<Int> {
         urls.indices // The prefetcher needs to know which indices are valid
