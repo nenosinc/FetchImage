@@ -13,6 +13,10 @@ import Foundation
 import Nuke
 import SwiftUI
 
+public enum FireImageError: Error {
+    case sourceEmpty
+}
+
 /// An observable object that simplifies image loading in SwiftUI.
 ///
 @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
@@ -100,9 +104,12 @@ public final class FireImage: ObservableObject, Identifiable {
     
     private var imageTask: ImageTask?
     
-    // publisher support
+    // MARK: - Publisher Support
+    
     private var lastResponse: ImageResponse?
     private var cancellable: AnyCancellable?
+    
+    // MARK: - Lifecycle
     
     deinit {
         cancel()
@@ -110,11 +117,23 @@ public final class FireImage: ObservableObject, Identifiable {
     
     public init() {}
     
-    // MARK: Load (ImageRequestConvertible)
+    // MARK: Load
     
     public typealias CompletedLoad = ((URL?) async -> Void)
     public typealias UniqueURL = (() async throws -> URL)
     
+    /// Initializes the fetch request with a Firebase `StorageReference` to an image in
+    /// any of Nuke's supported formats. The remote URL is then fetched from Firebase
+    /// and the image is subsequently fetched as well.
+    ///
+    /// - parameter regularStorageRef: A `StorageReference` which points to a
+    ///   Firebase Storage file in any of Nuke's supported image formats.
+    /// - parameter uniqueURL: A caller to request any potentially cached image URLs.
+    ///   Implementing your own URL caching prevents potentially unnecessary roundtrips to
+    ///   your Firebase Storage bucket.
+    /// - parameter finished: Called when URL loading has completed and fetching can
+    ///   begin. If the caller is `nil`, a fetch operation is queued immediately.
+    ///
     public func load(_ regularStorageRef: StorageReference, uniqueURL: UniqueURL?, finished: CompletedLoad?) async {
         // If provided, query the uniqueURL block for a cached URL.
         // If successful, use that parameter instead.
@@ -140,9 +159,7 @@ public final class FireImage: ObservableObject, Identifiable {
             await completionBlock(discoveredURL)
         }
         
-        DispatchQueue.main.async {
-            self.load(request)
-        }
+        await load(request)
     }
     
     private func fetchStandardURL(for regularStorageRef: StorageReference, finish: CompletedLoad?) async {
@@ -157,65 +174,13 @@ public final class FireImage: ObservableObject, Identifiable {
         }
     }
     
-    /// Initializes the fetch request with a Firebase Storage Reference to an image in
-    /// any of Nuke's supported formats. The remote URL is then fetched from Firebase
-    /// and the image is subsequently fetched as well.
-    ///
-    /// - parameter regularStorageRef: A `StorageReference` which points to a
-    ///     Firebase Storage file in any of Nuke's supported image formats.
-    /// - parameter uniqueURL: A caller to request any potentially cached image URLs.
-    ///     Implementing your own URL caching prevents potentially unnecessary roundtrips to
-    ///     your Firebase Storage bucket.
-    /// - parameter finished: Called when URL loading has completed and fetching can
-    ///     begin. If the caller is `nil`, a fetch operation is queued immediately.
-    ///
-    public func load(regularStorageRef: StorageReference, uniqueURL: (() -> URL?)? = nil, finished: ((URL?) -> Void)? = nil) {
-        func finishOrLoad(_ request: ImageRequest, discoveredURL: URL? = nil) {
-            if let completionBlock = finished {
-                completionBlock(discoveredURL)
-            }
-            load(request)
-        }
-        
-        func getRegularURL() {
-            DispatchQueue.global(qos: .userInteractive).async {
-                regularStorageRef.downloadURL { (discoveredURL, error) in
-                    if let given = discoveredURL {
-                        let newRequest = ImageRequest(url: given)
-                        self.priority = newRequest.priority
-                        
-                        finishOrLoad(newRequest, discoveredURL: given)
-                    } else {
-                        finished?(discoveredURL)
-                    }
-                }
-            }
-        }
-        
-        // If provided, query the uniqueURL block for a cached URL.
-        // If successful, use that parameter instead.
-        if let uniqueURLBlock = uniqueURL {
-            if let givenURL = uniqueURLBlock() {
-                // An existing unique URL where the image may be found or cached.
-                let newRequest = ImageRequest(url: givenURL)
-                self.priority = newRequest.priority
-                finishOrLoad(newRequest, discoveredURL: givenURL)
-                return // Return early, no need to awaken the Firebeasty
-            }
-        }
-        
-        getRegularURL()
-    }
-    
     /// Loads an image with the given request.
     ///
-    public func load(_ request: ImageRequestConvertible?) {
-        assert(Thread.isMainThread, "Must be called from the main thread")
-        
+    @MainActor public func load(_ request: ImageRequestConvertible?) {
         reset()
         
         guard var request = request?.asImageRequest() else {
-            handle(result: .failure(FetchImageError.sourceEmpty), isSync: true)
+            handle(result: .failure(FireImageError.sourceEmpty), isSync: true)
             return
         }
         
@@ -231,7 +196,7 @@ public final class FireImage: ObservableObject, Identifiable {
             if image.isPreview {
                 imageContainer = image // Display progressive image
             } else {
-                let response = ImageResponse(container: image, cacheType: .memory)
+                let response = ImageResponse(container: image, request: request, cacheType: .disk)
                 handle(result: .success(response), isSync: true)
                 return
             }
