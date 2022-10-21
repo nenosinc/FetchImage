@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/kean/Nuke.git", from: "11.3.0"),
-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "9.6.0")
+        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "10.0.0")
     ],
     targets: [
         .target(
